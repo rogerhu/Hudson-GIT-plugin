@@ -35,7 +35,7 @@ public class GitChangeSet extends ChangeLogSet.Entry {
     private static final Pattern AUTHOR_ENTRY = Pattern.compile("^author (.*) <(.*)> (.*) (.*)$");
     private static final Pattern COMMITTER_ENTRY = Pattern.compile("^committer (.*) <(.*)> (.*) (.*)$");
     private static final Pattern RENAME_SPLIT = Pattern.compile("^(.*?)\t(.*)$");
-    
+
     private static final String NULL_HASH = "0000000000000000000000000000000000000000";
     private String committer;
     private String committerEmail;
@@ -51,7 +51,7 @@ public class GitChangeSet extends ChangeLogSet.Entry {
     private String parentCommit;
     private Collection<Path> paths = new HashSet<Path>();
     private boolean authorOrCommitter;
-    
+
     public GitChangeSet(List<String> lines, boolean authorOrCommitter) {
         this.authorOrCommitter = authorOrCommitter;
         if (lines.size() > 0) {
@@ -146,6 +146,50 @@ public class GitChangeSet extends ChangeLogSet.Entry {
         return NULL_HASH.equals(hash) ? null : hash;
     }
 
+     /**
+      * Returns user of the change set.
+      *
+      * @param csAuthor user name.
+      * @param csAuthorEmail user email.
+      * @param createAccountBasedOnEmail true if create new user based on author/committer's email.
+      * @return {@link User}
+      */
+     public User findOrCreateUser(String csAuthor, String csAuthorEmail, boolean createAccountBasedOnEmail) {
+         User user;
+         if (createAccountBasedOnEmail) {
+             user = User.get(csAuthorEmail, true);
+             try {
+                 user.setFullName(csAuthor);
+                 user.save();
+             } catch (IOException e) {
+                 // add logging statement?
+             }
+         } else {
+             user = User.get(csAuthor, false);
+
+             if (user == null)
+                 user = User.get(csAuthorEmail.split("@")[0], true);
+         }
+         // set email address for user if none is already available
+         if (fixEmpty(csAuthorEmail) != null && user.getProperty(Mailer.UserProperty.class)==null) {
+             try {
+                 user.addProperty(new Mailer.UserProperty(csAuthorEmail));
+             } catch (IOException e) {
+                 // ignore error
+             }
+         }
+         return user;
+     }
+
+     private boolean isCreateAccountBasedOnEmail() {
+         ChangeLogSet parent = getParent();
+         boolean createAccountBasedOnEmail = false;
+         if (parent != null) {
+             createAccountBasedOnEmail = ((GitSCM) parent.build.getProject().getScm()).isCreateAccountBasedOnEmail();
+         }
+         return createAccountBasedOnEmail;
+     }
+
     @Exported
     public String getDate() {
         DateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -154,7 +198,7 @@ public class GitChangeSet extends ChangeLogSet.Entry {
         String csTime;
         String csTz;
         Date csDate;
-        
+
         if (authorOrCommitter) {
             csTime = this.authorTime;
             csTz = this.authorTz;
@@ -174,8 +218,8 @@ public class GitChangeSet extends ChangeLogSet.Entry {
 
         return dateStr;
     }
-        
-            
+
+
     @Override
     public void setParent(ChangeLogSet parent) {
         super.setParent(parent);
@@ -204,7 +248,7 @@ public class GitChangeSet extends ChangeLogSet.Entry {
     public Collection<Path> getPaths() {
         return paths;
     }
-    
+
     @Override
     public Collection<Path> getAffectedFiles() {
         return this.paths;
@@ -225,26 +269,12 @@ public class GitChangeSet extends ChangeLogSet.Entry {
             csAuthor = this.committer;
             csAuthorEmail = this.committerEmail;
         }
-        
+
         if (csAuthor == null) {
             throw new RuntimeException("No author in this changeset!");
         }
 
-        User user = User.get(csAuthor, false);
-
-        if (user == null) 
-            user = User.get(csAuthorEmail.split("@")[0], true);
-    
-        // set email address for user if needed
-        if (fixEmpty(csAuthorEmail) != null) {
-            try {
-                user.addProperty(new Mailer.UserProperty(csAuthorEmail));
-            } catch (IOException e) {
-                // ignore error
-            }
-        }
-
-        return user;
+        return findOrCreateUser(csAuthor, csAuthorEmail, isCreateAccountBasedOnEmail());
     }
 
     /**
@@ -265,14 +295,14 @@ public class GitChangeSet extends ChangeLogSet.Entry {
             csAuthor = this.committer;
             csAuthorEmail = this.committerEmail;
         }
-        
+
         if (csAuthor == null) {
             throw new RuntimeException("No author in this changeset!");
         }
 
         return csAuthor;
     }
-    
+
     @Override
     @Exported
     public String getMsg() {
@@ -287,7 +317,7 @@ public class GitChangeSet extends ChangeLogSet.Entry {
     public String getRevision() {
         return this.id;
     }
-    
+
     @Exported
     public String getComment() {
         return this.comment;

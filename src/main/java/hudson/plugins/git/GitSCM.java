@@ -424,6 +424,11 @@ public class GitSCM extends SCM implements Serializable {
         return fixEmptyAndTrim(confEmail);
     }
 
+    public boolean isCreateAccountBasedOnEmail() {
+        DescriptorImpl gitDescriptor = ((DescriptorImpl) getDescriptor());
+        return (gitDescriptor != null && gitDescriptor.isCreateAccountBasedOnEmail());
+    }
+
     public boolean getSkipTag() {
         return this.skipTag;
     }
@@ -1285,10 +1290,19 @@ public class GitSCM extends SCM implements Serializable {
         private String gitExe;
         private String globalConfigName;
         private String globalConfigEmail;
+        private boolean createAccountBasedOnEmail;
 
         public DescriptorImpl() {
             super(GitSCM.class, GitRepositoryBrowser.class);
             load();
+        }
+
+        public boolean isCreateAccountBasedOnEmail() {
+            return createAccountBasedOnEmail;
+        }
+
+        public void setCreateAccountBasedOnEmail(boolean createAccountBasedOnEmail) {
+            this.createAccountBasedOnEmail = createAccountBasedOnEmail;
         }
 
         public String getDisplayName() {
@@ -1594,7 +1608,7 @@ public class GitSCM extends SCM implements Serializable {
     /**
      * Given the workspace, gets the working directory, which will be the workspace
      * if no relative target dir is specified. Otherwise, it'll be "workspace/relativeTargetDir".
-     * 
+     *
      * @param workspace
      * @return working directory
      */
